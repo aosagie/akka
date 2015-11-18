@@ -15,6 +15,7 @@ import scala.annotation.unchecked.uncheckedVariance
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 import akka.japi.Util
+import java.util.Comparator
 
 /**
  * A “stream of streams” sub-flow of data elements, e.g. produced by `groupBy`.
@@ -723,6 +724,22 @@ class SubSource[+Out, +Mat](delegate: scaladsl.SubFlow[Out, Mat, scaladsl.Source
    */
   def merge[T >: Out](that: Graph[SourceShape[T], _]): SubSource[T, Mat] =
     new SubSource(delegate.merge(that))
+
+  /**
+   * Merge the given [[Source]] to this [[Source]], taking elements as they arrive from input streams,
+   * picking always the smallest of the available elements (waiting for one element from each side
+   * to be available).
+   *
+   * '''Emits when''' one of the inputs has an element available
+   *
+   * '''Backpressures when''' downstream backpressures
+   *
+   * '''Completes when''' all upstreams complete
+   *
+   * '''Cancels when''' downstream cancels
+   */
+  def mergeSorted[U >: Out, M](that: Graph[SourceShape[U], M], comp: Comparator[U]): javadsl.SubSource[U, Mat] =
+    new SubSource(delegate.mergeSorted(that)(Ordering.comparatorToOrdering(comp)))
 
   /**
    * Combine the elements of current [[Flow]] and the given [[Source]] into a stream of tuples.

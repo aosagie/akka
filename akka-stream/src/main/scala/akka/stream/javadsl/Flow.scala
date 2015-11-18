@@ -15,6 +15,7 @@ import scala.collection.immutable
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 import akka.japi.Util
+import java.util.Comparator
 
 object Flow {
 
@@ -1056,6 +1057,33 @@ final class Flow[-In, +Out, +Mat](delegate: scaladsl.Flow[In, Out, Mat]) extends
   def mergeMat[T >: Out, M, M2](that: Graph[SourceShape[T], M],
                                 matF: function.Function2[Mat, M, M2]): javadsl.Flow[In, T, M2] =
     new Flow(delegate.mergeMat(that)(combinerToScala(matF)))
+
+  /**
+   * Merge the given [[Source]] to this [[Flow]], taking elements as they arrive from input streams,
+   * picking always the smallest of the available elements (waiting for one element from each side
+   * to be available).
+   *
+   * '''Emits when''' one of the inputs has an element available
+   *
+   * '''Backpressures when''' downstream backpressures
+   *
+   * '''Completes when''' all upstreams complete
+   *
+   * '''Cancels when''' downstream cancels
+   */
+  def mergeSorted[U >: Out, M](that: Graph[SourceShape[U], M], comp: Comparator[U]): javadsl.Flow[In, U, Mat] =
+    new Flow(delegate.mergeSorted(that)(Ordering.comparatorToOrdering(comp)))
+
+  /**
+   * Merge the given [[Source]] to this [[Flow]], taking elements as they arrive from input streams,
+   * picking always the smallest of the available elements (waiting for one element from each side
+   * to be available).
+   *
+   * @see [[#mergeSorted]].
+   */
+  def mergeSortedMat[U >: Out, Mat2, Mat3](that: Graph[SourceShape[U], Mat2], comp: Comparator[U],
+                                           matF: function.Function2[Mat, Mat2, Mat3]): javadsl.Flow[In, U, Mat3] =
+    new Flow(delegate.mergeSortedMat(that)(combinerToScala(matF))(Ordering.comparatorToOrdering(comp)))
 
   /**
    * Combine the elements of current [[Flow]] and the given [[Source]] into a stream of tuples.

@@ -1339,7 +1339,7 @@ trait FlowOps[+Out, +Mat] {
    *
    * '''Cancels when''' downstream cancels
    */
-  def merge[U >: Out](that: Graph[SourceShape[U], _]): Repr[U] =
+  def merge[U >: Out, M](that: Graph[SourceShape[U], M]): Repr[U] =
     via(mergeGraph(that))
 
   protected def mergeGraph[U >: Out, M](that: Graph[SourceShape[U], M]): Graph[FlowShape[Out @uncheckedVariance, U], M] =
@@ -1349,6 +1349,31 @@ trait FlowOps[+Out, +Mat] {
         val merge = b.add(Merge[U](2))
         r ~> merge.in(1)
         FlowShape(merge.in(0), merge.out)
+    }
+
+  /**
+   * Merge the given [[Source]] to this [[Flow]], taking elements as they arrive from input streams,
+   * picking always the smallest of the available elements (waiting for one element from each side
+   * to be available).
+   *
+   * '''Emits when''' one of the inputs has an element available
+   *
+   * '''Backpressures when''' downstream backpressures
+   *
+   * '''Completes when''' all upstreams complete
+   *
+   * '''Cancels when''' downstream cancels
+   */
+  def mergeSorted[U >: Out, M](that: Graph[SourceShape[U], M])(implicit ord: Ordering[U]): Repr[U] =
+    via(mergeSortedGraph(that))
+
+  protected def mergeSortedGraph[U >: Out, M](that: Graph[SourceShape[U], M])(implicit ord: Ordering[U]): Graph[FlowShape[Out @uncheckedVariance, U], M] =
+    GraphDSL.create(that) { implicit b ⇒
+      r ⇒
+        import GraphDSL.Implicits._
+        val merge = b.add(new MergeSorted[U])
+        r ~> merge.in1
+        FlowShape(merge.in0, merge.out)
     }
 
   /**
@@ -1512,6 +1537,16 @@ trait FlowOpsMat[+Out, +Mat] extends FlowOps[Out, Mat] {
    */
   def mergeMat[U >: Out, Mat2, Mat3](that: Graph[SourceShape[U], Mat2])(matF: (Mat, Mat2) ⇒ Mat3): ReprMat[U, Mat3] =
     viaMat(mergeGraph(that))(matF)
+
+  /**
+   * Merge the given [[Source]] to this [[Flow]], taking elements as they arrive from input streams,
+   * picking always the smallest of the available elements (waiting for one element from each side
+   * to be available).
+   *
+   * @see [[#mergeSorted]].
+   */
+  def mergeSortedMat[U >: Out, Mat2, Mat3](that: Graph[SourceShape[U], Mat2])(matF: (Mat, Mat2) ⇒ Mat3)(implicit ord: Ordering[U]): ReprMat[U, Mat3] =
+    viaMat(mergeSortedGraph(that))(matF)
 
   /**
    * Concatenate the given [[Source]] to this [[Flow]], meaning that once this
